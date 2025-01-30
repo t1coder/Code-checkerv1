@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Checker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      color: #333;
+    }
+
+    header {
+      background-color: #f36c21;
+      color: white;
+      text-align: center;
+      padding: 15px;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    .calendar, .scan-section, .product-list, .analytics {
+      margin-bottom: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #f36c21;
+    }
+
+    .scan-section input[type="text"], .scan-section select, .scan-section input[type="date"] {
+      width: 100%;
+      padding: 15px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1.1em;
+    }
+
+    .scan-section button {
+      width: 100%;
+      padding: 15px;
+      background-color: #f36c1e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1.1em;
+      cursor: pointer;
+    }
+
+    .scan-section button:hover {
+      background-color: #e65c1e;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: center;
+    }
+
+    table th {
+      background-color: #f36c21;
+      color: white;
+    }
+
+    .status-good {
+      color: #5cb85c;
+      font-weight: bold;
+    }
+
+    .status-warning {
+      color: #f0ad4e;
+      font-weight: bold;
+    }
+
+    .status-critical {
+      color: #d9534f;
+      font-weight: bold;
+    }
+
+    .analytics {
+      text-align: center;
+    }
+
+    .analytics div {
+      margin: 10px 0;
+      font-size: 1.2em;
+    }
+
+    .scrollable {
+      overflow-y: auto;
+      max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Product Checker</h1>
+  </header>
+  <div class="container">
+    <!-- Calendar Section -->
+    <div class="calendar">
+      <div id="currentDateTime"></div>
+    </div>
+
+    <!-- Scanning Section -->
+    <div class="scan-section">
+      <h2>Scan Product</h2>
+      <input type="text" id="productInput" placeholder="Enter or scan product code">
+      <input type="date" id="expiryDateInput">
+      <select id="categorySelect">
+        <option value="Short Life">Short Life</option>
+        <option value="Long Life">Long Life</option>
+      </select>
+      <button onclick="addProduct()">Add to List</button>
+    </div>
+
+    <!-- Product List Section -->
+    <div class="product-list scrollable">
+      <h2>Product List</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Product Code</th>
+            <th>Expiry Date</th>
+            <th>Category</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="productTable">
+          <!-- Placeholder for products -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="analytics">
+      <h2>Analytics</h2>
+      <div>Total Products: <span id="totalProducts">0</span></div>
+    </div>
+
+    <!-- Export to PDF -->
+    <button onclick="exportToPDF()" style="margin-top: 20px; width: 100%; padding: 15px; background-color: #f36c21; color: white; border: none; border-radius: 6px; font-size: 1.1em; cursor: pointer;">
+      Export to PDF
+    </button>
+  </div>
+
+  <script>
+    const products = [];
+
+    // Display current date and time
+    function updateDateTime() {
+      const dateTimeElement = document.getElementById("currentDateTime");
+      const now = new Date();
+      dateTimeElement.innerHTML = now.toLocaleString();
+    }
+    setInterval(updateDateTime, 1000);
+
+    function addProduct() {
+      const productInput = document.getElementById("productInput");
+      const expiryDateInput = document.getElementById("expiryDateInput");
+      const categorySelect = document.getElementById("categorySelect");
+
+      if (!productInput.value || !expiryDateInput.value) {
+        return alert("Please enter a product code and select an expiry date!");
+      }
+
+      const expiryDate = new Date(expiryDateInput.value);
+      products.push({
+        code: productInput.value,
+        expiry: expiryDate,
+        category: categorySelect.value,
+      });
+
+      productInput.value = "";
+      expiryDateInput.value = "";
+      loadProducts();
+    }
+
+    function loadProducts() {
+      const productTable = document.getElementById("productTable");
+      const totalProducts = document.getElementById("totalProducts");
+
+      productTable.innerHTML = "";
+      products.forEach(product => {
+        const todayDate = new Date().setHours(0, 0, 0, 0);
+        const expiryDate = new Date(product.expiry).setHours(0, 0, 0, 0);
+        const daysDiff = (expiryDate - todayDate) / (1000 * 60 * 60 * 24);
+
+        let statusClass = "status-good";
+        let statusText = "Good";
+
+        if (daysDiff === 0) {
+          statusClass = "status-critical";
+          statusText = "Reduce Today";
+        } else if (daysDiff > 0 && daysDiff <= 3) {
+          statusClass = "status-warning";
+          statusText = "Reduce Soon";
+        } else if (daysDiff < 0) {
+          statusClass = "status-critical";
+          statusText = "Expired";
+        }
+
+        const row = `
+          <tr>
+            <td>${product.code}</td>
+            <td>${product.expiry.toISOString().split("T")[0]}</td>
+            <td>${product.category}</td>
+            <td class="${statusClass}">${statusText}</td>
+          </tr>
+        `;
+        productTable.innerHTML += row;
+      });
+
+      totalProducts.textContent = products.length;
+    }
+
+    function exportToPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.text("Product List", 14, 10);
+      doc.autoTable({
+        head: [['Product Code', 'Expiry Date', 'Category', 'Status']],
+        body: products.map(product => {
+          const todayDate = new Date().setHours(0, 0, 0, 0);
+          const expiryDate = new Date(product.expiry).setHours(0, 0, 0, 0);
+          const daysDiff = (expiryDate - todayDate) / (1000 * 60 * 60 * 24);
+
+          let statusText = "Good";
+          if (daysDiff === 0) {
+            statusText = "Reduce Today";
+          } else if (daysDiff > 0 && daysDiff <= 3) {
+            statusText = "Reduce Soon";
+          } else if (daysDiff < 0) {
+            statusText = "Expired";
+          }
+
+          return [product.code, product.expiry.toISOString().split("T")[0], product.category, statusText];
+        }),
+      });
+
+      doc.save("Product_List.pdf");
+    }
+  </script>
+</body>
+</html>
